@@ -10,6 +10,49 @@ import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prism
 import prisma from "./prisma.server";
 
 export const PREMIUM_PLAN = "Premium Plan";
+const AUTH_PATH_PREFIX = "/auth";
+const PRODUCTION_APP_URL = "https://smart-exit-popup.onrender.com";
+
+function normalizeAppUrl(url) {
+  const appUrl = new URL(url);
+
+  appUrl.pathname = "";
+  appUrl.search = "";
+  appUrl.hash = "";
+
+  return appUrl.toString().replace(/\/$/, "");
+}
+
+function resolveAppUrl() {
+  if (process.env.NODE_ENV === "production") {
+    return PRODUCTION_APP_URL;
+  }
+
+  const configuredAppUrl = process.env.SHOPIFY_APP_URL?.trim();
+
+  if (!configuredAppUrl) {
+    return "";
+  }
+
+  return normalizeAppUrl(configuredAppUrl);
+}
+
+function normalizeShopDomain(domain) {
+  const trimmedDomain = domain?.trim();
+
+  if (!trimmedDomain) {
+    return null;
+  }
+
+  if (!trimmedDomain.includes("://")) {
+    return trimmedDomain.replace(/\/+$/, "");
+  }
+
+  return new URL(trimmedDomain).hostname;
+}
+
+const appUrl = resolveAppUrl();
+const customShopDomain = normalizeShopDomain(process.env.SHOP_CUSTOM_DOMAIN);
 
 export function shouldEnforceBilling() {
   return process.env.NODE_ENV === "production";
@@ -29,8 +72,8 @@ const shopify = shopifyApp({
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,
   scopes: process.env.SCOPES?.split(","),
-  appUrl: process.env.SHOPIFY_APP_URL || "",
-  authPathPrefix: "/auth",
+  appUrl,
+  authPathPrefix: AUTH_PATH_PREFIX,
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
   billing: {
@@ -47,9 +90,7 @@ const shopify = shopifyApp({
   future: {
     expiringOfflineAccessTokens: true,
   },
-  ...(process.env.SHOP_CUSTOM_DOMAIN
-    ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
-    : {}),
+  ...(customShopDomain ? { customShopDomains: [customShopDomain] } : {}),
 });
 
 export default shopify;
