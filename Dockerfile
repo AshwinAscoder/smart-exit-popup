@@ -13,6 +13,9 @@ RUN npm ci
 
 COPY . .
 
+# CRITICAL FIX: Run prisma generate before building the server production build
+RUN npx prisma generate
+
 RUN npm run build
 RUN npm prune --omit=dev && npm cache clean --force
 
