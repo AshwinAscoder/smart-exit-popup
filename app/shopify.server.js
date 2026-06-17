@@ -1,4 +1,5 @@
 import "@shopify/shopify-app-react-router/adapters/node";
+import "./env.server";
 import {
   ApiVersion,
   AppDistribution,
@@ -9,6 +10,19 @@ import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prism
 import prisma from "./prisma.server";
 
 export const PREMIUM_PLAN = "Premium Plan";
+
+export function shouldEnforceBilling() {
+  return process.env.NODE_ENV === "production";
+}
+
+export function getFreePopupLimit() {
+  const freePopupLimit = Number.parseInt(
+    process.env.FREE_POPUP_LIMIT || "0",
+    10,
+  );
+
+  return Number.isFinite(freePopupLimit) ? freePopupLimit : 0;
+}
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,

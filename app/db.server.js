@@ -1,12 +1,26 @@
-import "dotenv/config";
+import "./env.server";
 import mongoose from "mongoose";
 
 const DEFAULT_DATABASE_NAME = "smart_popup";
-const rawMongoUri = process.env.MONGODB_URI;
+const isProduction = process.env.NODE_ENV === "production";
+const rawMongoUri = process.env.MONGODB_URI?.trim();
 
 if (!rawMongoUri) {
   throw new Error(
-    "MONGODB_URI is not loaded. Add MONGODB_URI to .env and restart the Shopify dev server.",
+    isProduction
+      ? "[startup] Missing MONGODB_URI in production. Configure the Render environment variable before starting the app."
+      : "MONGODB_URI is not loaded. Add MONGODB_URI to .env and restart the Shopify dev server.",
+  );
+}
+
+if (
+  isProduction &&
+  /(^mongodb:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)|@(localhost|127\.0\.0\.1|0\.0\.0\.0))/i.test(
+    rawMongoUri,
+  )
+) {
+  throw new Error(
+    "[startup] MONGODB_URI points to a local database host in production. Use a hosted MongoDB connection string.",
   );
 }
 
@@ -27,7 +41,9 @@ function getMongoUriWithDatabase(uri) {
   return `${baseUri}/${DEFAULT_DATABASE_NAME}${queryString}`;
 }
 
-const mongoUri = getMongoUriWithDatabase(rawMongoUri);
+const mongoUri = isProduction
+  ? rawMongoUri
+  : getMongoUriWithDatabase(rawMongoUri);
 
 mongoose.set("strictQuery", false);
 

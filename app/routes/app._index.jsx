@@ -24,7 +24,12 @@ import "@shopify/polaris/build/esm/styles.css";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import connectDB, { PopupSettings } from "../db.server";
-import { authenticate } from "../shopify.server";
+import {
+  authenticate,
+  getFreePopupLimit,
+  PREMIUM_PLAN,
+  shouldEnforceBilling,
+} from "../shopify.server";
 
 const defaultSettings = {
   popupHeading: "Wait! Don't Go! Get 10% Off Now!",
@@ -43,19 +48,34 @@ function serializeSettings(settings) {
   };
 }
 
-export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+async function isWithinFreeTier(shop) {
+  const freePopupLimit = getFreePopupLimit();
 
-  // Billing is disabled during local/private app development because Shopify
-  // only allows Billing API calls for publicly distributed apps.
-  // await billing.require({
-  //   plans: ["Premium Plan"],
-  //   onFailure: async () => billing.request({ plan: "Premium Plan" }),
-  // });
+  if (!Number.isFinite(freePopupLimit) || freePopupLimit <= 0) {
+    return false;
+  }
+
+  const popupCount = await PopupSettings.countDocuments({ shop });
+
+  return popupCount <= freePopupLimit;
+}
+
+export const loader = async ({ request }) => {
+  const { billing, session } = await authenticate.admin(request);
 
   const shop = session.shop;
 
   await connectDB();
+
+  if (
+    shouldEnforceBilling() &&
+    !(await isWithinFreeTier(shop))
+  ) {
+    await billing.require({
+      plans: [PREMIUM_PLAN],
+      onFailure: async () => billing.request({ plan: PREMIUM_PLAN }),
+    });
+  }
 
   const savedSettings = await PopupSettings.findOne({ shop }).lean();
 
